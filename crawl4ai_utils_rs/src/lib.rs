@@ -1,3 +1,4 @@
+pub mod bm25;
 pub mod chunking;
 pub mod fs;
 pub mod hash;
@@ -47,5 +48,8 @@ fn crawl4ai_utils(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Math
     m.add_function(wrap_pyfunction!(math::cosine_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(math::cosine_distance, m)?)?;
+    // BM25 / stemming
+    m.add_function(wrap_pyfunction!(bm25::stem_tokens, m)?)?;
+    m.add_function(wrap_pyfunction!(bm25::bm25_scores, m)?)?;
     Ok(())
 }

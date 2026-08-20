@@ -20,6 +20,7 @@ dirs = "5.0"
 url = "2.5"
 scraper = "0.22"
 num_cpus = "1.16"
+rust-stemmers = "1.2"
 
 [profile.release]
 opt-level = 3

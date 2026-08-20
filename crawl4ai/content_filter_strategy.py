@@ -3,7 +3,6 @@ import re
 import time
 from bs4 import BeautifulSoup, Tag
 from typing import List, Tuple, Dict, Optional
-from rank_bm25 import BM25Okapi
 from collections import deque
 from bs4 import NavigableString, Comment
 
@@ -16,11 +15,12 @@ from .utils import (
     extract_xml_data,
     merge_chunks,
 )
+# Rust-powered implementations (crawl4ai_utils)
+from crawl4ai_utils import bm25_scores, stem_tokens
 from .types import LLMConfig
 from .config import DEFAULT_PROVIDER, OVERLAP_RATE, WORD_TOKEN_RATE
 from abc import ABC, abstractmethod
 import math
-from snowballstemmer import stemmer
 from .models import TokenUsage
 from .prompts import PROMPT_FILTER_CONTENT
 import json
@@ -422,6 +422,7 @@ class BM25ContentFilter(RelevantContentFilter):
         super().__init__(user_query=user_query)
         self.bm25_threshold = bm25_threshold
         self.use_stemming = use_stemming
+        self.language = language
         self.priority_tags = {
             "h1": 5.0,
             "h2": 4.0,
@@ -435,7 +436,6 @@ class BM25ContentFilter(RelevantContentFilter):
             "pre": 1.5,
             "th": 1.5,  # Table headers
         }
-        self.stemmer = stemmer(language) if use_stemming else None
 
     def filter_content(self, html: str, min_word_threshold: int = None) -> List[str]:
         """
@@ -484,28 +484,22 @@ class BM25ContentFilter(RelevantContentFilter):
 
         if self.use_stemming:
             tokenized_corpus = [
-                [self.stemmer.stemWord(word) for word in chunk.lower().split()]
+                stem_tokens(chunk.lower().split(), self.language)
                 for _, chunk, _, _ in candidates
             ]
-            tokenized_query = [
-                self.stemmer.stemWord(word) for word in query.lower().split()
-            ]
+            tokenized_query = stem_tokens(query.lower().split(), self.language)
         else:
             tokenized_corpus = [
                 chunk.lower().split() for _, chunk, _, _ in candidates
             ]
             tokenized_query = query.lower().split()
 
-        # tokenized_corpus = [[self.stemmer.stemWord(word) for word in tokenize_text(chunk.lower())]
-        #            for _, chunk, _, _ in candidates]
-        # tokenized_query = [self.stemmer.stemWord(word) for word in tokenize_text(query.lower())]
-
-        # Clean from stop words and noise
+        # Clean from stop words and noise (Rust)
         tokenized_corpus = [clean_tokens(tokens) for tokens in tokenized_corpus]
         tokenized_query = clean_tokens(tokenized_query)
 
-        bm25 = BM25Okapi(tokenized_corpus)
-        scores = bm25.get_scores(tokenized_query)
+        # BM25Okapi scores (Rust)
+        scores = bm25_scores(tokenized_corpus, tokenized_query)
 
         # Adjust scores with tag weights
         adjusted_candidates = []
