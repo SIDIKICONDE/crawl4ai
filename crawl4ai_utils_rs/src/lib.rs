@@ -1,5 +1,3 @@
-#![allow(deprecated)]
-
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 use serde_json::Value as JsonValue;
@@ -153,7 +151,7 @@ fn merge_chunks(
         return Ok(Vec::new());
     }
 
-    let num_chunks = ((total_tokens + target_size - 1) / target_size).max(1);
+    let num_chunks = total_tokens.div_ceil(target_size).max(1);
     let mut chunks: Vec<Vec<String>> = vec![Vec::new(); num_chunks];
     let mut curr_chunk = 0;
     let mut curr_size = 0;
@@ -347,20 +345,20 @@ fn split_and_parse_json_objects(
 }
 
 fn json_value_to_pyobject(py: Python, value: &JsonValue) -> PyResult<PyObject> {
-    use pyo3::ToPyObject;
+    use pyo3::IntoPyObjectExt;
     match value {
         JsonValue::Null => Ok(py.None()),
-        JsonValue::Bool(b) => Ok(b.to_object(py)),
+        JsonValue::Bool(b) => (*b).into_py_any(py),
         JsonValue::Number(n) => {
             if let Some(i) = n.as_i64() {
-                Ok(i.to_object(py))
+                i.into_py_any(py)
             } else if let Some(f) = n.as_f64() {
-                Ok(f.to_object(py))
+                f.into_py_any(py)
             } else {
-                Ok(n.to_string().to_object(py))
+                n.to_string().into_py_any(py)
             }
         }
-        JsonValue::String(s) => Ok(s.to_object(py)),
+        JsonValue::String(s) => s.clone().into_py_any(py),
         JsonValue::Array(arr) => {
             let py_list = PyList::new(
                 py,
