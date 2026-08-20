@@ -1,0 +1,36 @@
+//! Constants mirroring crawl4ai/html2text/config.py
+
+pub const UNICODE_SNOB: bool = false;
+pub const TABLE_MARKER_FOR_PAD: &str = "special_marker_for_table_padding";
+pub const ESCAPE_SNOB: bool = false;
+pub const ESCAPE_BACKSLASH: bool = false;
+pub const ESCAPE_DOT: bool = false;
+pub const ESCAPE_PLUS: bool = false;
+pub const ESCAPE_DASH: bool = false;
+pub const LINKS_EACH_PARAGRAPH: bool = false;
+pub const BODY_WIDTH: usize = 78;
+pub const SKIP_INTERNAL_LINKS: bool = true;
+pub const INLINE_LINKS: bool = true;
+pub const PROTECT_LINKS: bool = false;
+pub const WRAP_LINKS: bool = true;
+pub const WRAP_LIST_ITEMS: bool = false;
+pub const WRAP_TABLES: bool = false;
+pub const GOOGLE_LIST_INDENT: usize = 36;
+pub const BOLD_TEXT_STYLE_VALUES: [&str; 4] = ["bold", "700", "800", "900"];
+pub const IGNORE_ANCHORS: bool = false;
+pub const IGNORE_MAILTO_LINKS: bool = false;
+pub const IGNORE_IMAGES: bool = false;
+pub const IMAGES_AS_HTML: bool = false;
+pub const IMAGES_TO_ALT: bool = false;
+pub const IMAGES_WITH_SIZE: bool = false;
+pub const IGNORE_EMPHASIS: bool = false;
+pub const MARK_CODE: bool = false;
+pub const DEFAULT_IMAGE_ALT: &str = "";
+pub const PAD_TABLES: bool = false;
+pub const USE_AUTOMATIC_LINKS: bool = true;
+pub const BYPASS_TABLES: bool = false;
+pub const IGNORE_TABLES: bool = false;
+pub const SINGLE_LINE_BREAK: bool = false;
+pub const OPEN_QUOTE: &str = "\"";
+pub const CLOSE_QUOTE: &str = "\"";
+pub const INCLUDE_SUP_SUB: bool = false;

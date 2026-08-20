@@ -1,0 +1,21 @@
+[package]
+name = "crawl4ai-html2text"
+version = "0.1.0"
+edition = "2021"
+description = "Rust port of Crawl4AI's html2text (HTML -> Markdown), PyO3 bindings"
+
+[lib]
+name = "crawl4ai_html2text"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py39"] }
+fancy-regex = "0.14"
+phf = { version = "0.11", features = ["macros"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+
+[dev-dependencies]
+serde_json = "1.0.151"
