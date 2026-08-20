@@ -19,9 +19,9 @@ from pathlib import Path
 from collections import defaultdict
 
 # --- Configuration ---
-REPO = "unclecode/crawl4ai"
+REPO = "SIDIKICONDE/crawl4ai"
 PYPI_PACKAGE = "crawl4ai"
-DOCKER_REPO = "unclecode/crawl4ai"
+DOCKER_REPO = "SIDIKICONDE/crawl4ai"
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "docs" / "md_v2" / "stats.md"
 
 # Star history milestones (manually maintained — stargazer API is too slow for 60K+ stars)

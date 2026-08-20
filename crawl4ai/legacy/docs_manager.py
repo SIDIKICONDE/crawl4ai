@@ -39,7 +39,7 @@ class DocsManager:
 
             # Fallback to GitHub
             response = requests.get(
-                "https://api.github.com/repos/unclecode/crawl4ai/contents/docs/llm.txt",
+                "https://api.github.com/repos/SIDIKICONDE/crawl4ai/contents/docs/llm.txt",
                 headers={"Accept": "application/vnd.github.v3+json"},
             )
             response.raise_for_status()

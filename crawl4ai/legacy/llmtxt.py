@@ -302,7 +302,7 @@ Wrap your response in <index>...</index> tags.
                     self.logger.warning("No facts found at all. Index remains empty.")
                 return
 
-        # ----------------------------------------------------- /Users/unclecode/.crawl4ai/docs/14_proxy_security.q.q.tokens '/Users/unclecode/.crawl4ai/docs/14_proxy_security.q.md'
+        # -----------------------------------------------------
         # If we reach here, we have new or changed .q.md files
         # We'll parse them, reindex them, and then combine with existing_facts
         # -----------------------------------------------------
