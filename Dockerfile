@@ -1,7 +1,7 @@
 FROM python:3.12-slim-bookworm AS build
 
 # C4ai version
-ARG C4AI_VER=0.9.2
+ARG C4AI_VER=0.1.0
 ENV C4AI_VERSION=$C4AI_VER
 LABEL c4ai.version=$C4AI_VER
 
@@ -34,7 +34,7 @@ ARG REDIS_VERSION="6:7.2.7-1rl1~bookworm1"
 
 LABEL maintainer="SIDIKICONDE"
 LABEL description="🔥🕷️ Crawl4AI: Open-source LLM Friendly Web Crawler & scraper"
-LABEL version="1.0"
+LABEL version="0.1.0"
 
 # Install curl and gnupg first (needed to add Redis repo)
 RUN apt-get update && apt-get install -y --no-install-recommends curl gnupg \
