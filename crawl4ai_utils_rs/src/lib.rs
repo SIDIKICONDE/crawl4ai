@@ -18,6 +18,10 @@ fn crawl4ai_utils(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(chunking::merge_chunks, m)?)?;
     m.add_function(wrap_pyfunction!(chunking::merge_chunks_based_on_token_threshold, m)?)?;
     m.add_function(wrap_pyfunction!(chunking::advanced_split, m)?)?;
+    m.add_function(wrap_pyfunction!(chunking::fixed_length_chunks, m)?)?;
+    m.add_function(wrap_pyfunction!(chunking::sliding_window_chunks, m)?)?;
+    m.add_function(wrap_pyfunction!(chunking::overlapping_window_chunks, m)?)?;
+    m.add_function(wrap_pyfunction!(chunking::regex_split, m)?)?;
     // Sanitize / JSON
     m.add_function(wrap_pyfunction!(sanitize::sanitize_html, m)?)?;
     m.add_function(wrap_pyfunction!(sanitize::sanitize_input_encode, m)?)?;

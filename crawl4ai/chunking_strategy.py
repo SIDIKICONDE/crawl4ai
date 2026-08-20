@@ -1,8 +1,14 @@
 from abc import ABC, abstractmethod
-import re
 from collections import Counter
 import string
 from .model_loader import load_nltk_punkt
+# Rust-powered implementations (crawl4ai_utils)
+from crawl4ai_utils import (
+    fixed_length_chunks,
+    overlapping_window_chunks,
+    regex_split,
+    sliding_window_chunks,
+)
 
 # Define the abstract base class for chunking strategies
 class ChunkingStrategy(ABC):
@@ -52,13 +58,7 @@ class RegexChunking(ChunkingStrategy):
         self.patterns = patterns
 
     def chunk(self, text: str) -> list:
-        paragraphs = [text]
-        for pattern in self.patterns:
-            new_paragraphs = []
-            for paragraph in paragraphs:
-                new_paragraphs.extend(re.split(pattern, paragraph))
-            paragraphs = new_paragraphs
-        return paragraphs
+        return regex_split(text, self.patterns)
 
 
 # NLP-based sentence chunking
@@ -163,11 +163,7 @@ class FixedLengthWordChunking(ChunkingStrategy):
         self.chunk_size = chunk_size
 
     def chunk(self, text: str) -> list:
-        words = text.split()
-        return [
-            " ".join(words[i : i + self.chunk_size])
-            for i in range(0, len(words), self.chunk_size)
-        ]
+        return fixed_length_chunks(text, self.chunk_size)
 
 
 # Sliding window chunking
@@ -194,21 +190,7 @@ class SlidingWindowChunking(ChunkingStrategy):
         self.step = step
 
     def chunk(self, text: str) -> list:
-        words = text.split()
-        chunks = []
-
-        if len(words) <= self.window_size:
-            return [text]
-
-        for i in range(0, len(words) - self.window_size + 1, self.step):
-            chunk = " ".join(words[i : i + self.window_size])
-            chunks.append(chunk)
-
-        # Handle the last chunk if it doesn't align perfectly
-        if i + self.window_size < len(words):
-            chunks.append(" ".join(words[-self.window_size :]))
-
-        return chunks
+        return sliding_window_chunks(text, self.window_size, self.step)
 
 
 class OverlappingWindowChunking(ChunkingStrategy):
@@ -235,21 +217,4 @@ class OverlappingWindowChunking(ChunkingStrategy):
         self.overlap = overlap
 
     def chunk(self, text: str) -> list:
-        words = text.split()
-        chunks = []
-
-        if len(words) <= self.window_size:
-            return [text]
-
-        start = 0
-        while start < len(words):
-            end = start + self.window_size
-            chunk = " ".join(words[start:end])
-            chunks.append(chunk)
-
-            if end >= len(words):
-                break
-
-            start = end - self.overlap
-
-        return chunks
+        return overlapping_window_chunks(text, self.window_size, self.overlap)

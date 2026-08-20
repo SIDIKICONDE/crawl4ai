@@ -1,3 +1,4 @@
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use std::collections::HashSet;
 use std::collections::VecDeque;
@@ -286,4 +287,107 @@ fn splits_byte(o: usize) -> bool {
         98..=123 => false,
         _ => true,
     }
+}
+
+/// Split text into chunks of `chunk_size` words.
+///
+/// Faithful port of `FixedLengthWordChunking.chunk`.
+#[pyfunction]
+#[pyo3(signature = (text, chunk_size))]
+pub fn fixed_length_chunks(text: &str, chunk_size: usize) -> PyResult<Vec<String>> {
+    if chunk_size == 0 {
+        return Err(PyValueError::new_err(
+            "range() arg 3 must not be zero",
+        ));
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut chunks = Vec::new();
+    for i in (0..words.len()).step_by(chunk_size) {
+        chunks.push(words[i..words.len().min(i + chunk_size)].join(" "));
+    }
+    Ok(chunks)
+}
+
+/// Split text into sliding-window chunks.
+///
+/// Faithful port of `SlidingWindowChunking.chunk`.
+#[pyfunction]
+#[pyo3(signature = (text, window_size, step))]
+pub fn sliding_window_chunks(text: &str, window_size: usize, step: usize) -> PyResult<Vec<String>> {
+    if step == 0 {
+        return Err(PyValueError::new_err(
+            "range() arg 3 must not be zero",
+        ));
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut chunks = Vec::new();
+    if words.len() <= window_size {
+        return Ok(vec![text.to_string()]);
+    }
+    let mut last_start = 0usize;
+    let mut i = 0usize;
+    while i + window_size <= words.len() {
+        chunks.push(words[i..i + window_size].join(" "));
+        last_start = i;
+        i += step;
+    }
+    // Handle the last chunk if it doesn't align perfectly
+    if last_start + window_size < words.len() {
+        chunks.push(words[words.len() - window_size..].join(" "));
+    }
+    Ok(chunks)
+}
+
+/// Split text into overlapping-window chunks.
+///
+/// Faithful port of `OverlappingWindowChunking.chunk`.
+#[pyfunction]
+#[pyo3(signature = (text, window_size, overlap))]
+pub fn overlapping_window_chunks(
+    text: &str,
+    window_size: usize,
+    overlap: usize,
+) -> PyResult<Vec<String>> {
+    if overlap >= window_size {
+        return Err(PyValueError::new_err(
+            "overlap must be less than window_size",
+        ));
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut chunks = Vec::new();
+    if words.len() <= window_size {
+        return Ok(vec![text.to_string()]);
+    }
+    let mut start = 0usize;
+    while start < words.len() {
+        let end = (start + window_size).min(words.len());
+        chunks.push(words[start..end].join(" "));
+        if end >= words.len() {
+            break;
+        }
+        start = end - overlap;
+    }
+    Ok(chunks)
+}
+
+/// Split text sequentially on each regex pattern.
+///
+/// Faithful port of `RegexChunking.chunk` (patterns without capture groups;
+/// Python `re.split` would also include capture-group contents).
+#[pyfunction]
+pub fn regex_split(text: &str, patterns: Vec<String>) -> PyResult<Vec<String>> {
+    let mut paragraphs = vec![text.to_string()];
+    for pattern in patterns {
+        let re = regex::Regex::new(&pattern).map_err(|e| {
+            PyValueError::new_err(format!("Invalid regex pattern {pattern:?}: {e}"))
+        })?;
+        let mut new_paragraphs = Vec::new();
+        for p in &paragraphs {
+            for part in re.split(p) {
+                new_paragraphs.push(part.to_string());
+            }
+        }
+        paragraphs = new_paragraphs;
+    }
+    Ok(paragraphs)
 }
