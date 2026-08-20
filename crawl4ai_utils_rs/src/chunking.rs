@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 
 /// Chunk documents into token-limited sections with overlap
@@ -112,14 +113,16 @@ pub fn chunk_documents(
     Ok(results)
 }
 
-/// Merge chunks into target-sized chunks
+/// Merge chunks into target-sized chunks, with optional token overlap.
+///
+/// Faithful port of `utils.merge_chunks` (including the overlap handling).
 #[pyfunction]
-#[pyo3(signature = (docs, target_size, _overlap = 0, word_token_ratio = 1.0, splitter = None))]
+#[pyo3(signature = (docs, target_size, overlap = 0, word_token_ratio = 1.0, splitter = None))]
 pub fn merge_chunks(
     py: Python,
     docs: Vec<String>,
     target_size: usize,
-    _overlap: usize,
+    overlap: usize,
     word_token_ratio: f64,
     splitter: Option<PyObject>,
 ) -> PyResult<Vec<String>> {
@@ -156,8 +159,17 @@ pub fn merge_chunks(
 
     for tokens in all_tokens.into_iter().flatten() {
         if curr_size >= target_size && curr_chunk < num_chunks - 1 {
-            curr_chunk += 1;
-            curr_size = 0;
+            if overlap > 0 {
+                let start = chunks[curr_chunk].len().saturating_sub(overlap);
+                let overlap_tokens: Vec<String> = chunks[curr_chunk][start..].to_vec();
+                let overlap_len = overlap_tokens.len();
+                curr_chunk += 1;
+                chunks[curr_chunk].extend(overlap_tokens);
+                curr_size = overlap_len;
+            } else {
+                curr_chunk += 1;
+                curr_size = 0;
+            }
         }
         chunks[curr_chunk].push(tokens);
         curr_size += 1;
@@ -206,21 +218,72 @@ pub fn merge_chunks_based_on_token_threshold(
     merged
 }
 
-/// Split text into n-sized pieces
+/// Split text into words on punctuation/whitespace and HTML/code symbols.
+///
+/// Faithful port of `utils.advanced_split` (SPLITS table + HTML_CODE_CHARS).
 #[pyfunction]
 pub fn advanced_split(text: &str) -> Vec<String> {
-    let stop_words = [
-        "a", "an", "and", "are", "as", "at", "be", "but", "by", "for",
-        "if", "in", "into", "is", "it", "no", "not", "of", "on", "or",
-        "such", "that", "the", "their", "then", "there", "these", "they",
-        "this", "to", "was", "will", "with",
-    ];
+    let html_code_chars: HashSet<&str> = [
+        "•", "►", "▼", "©", "®", "™", "→", "⇒", "≈", "≤", "≥", "+=", "-=", "*=", "/=", "=>",
+        "<=>", "!=", "==", "===", "++", "--", "<<", ">>", "&&", "||", "??", "?:", "?.", "…",
+        "\u{201c}", "\u{201d}", "\u{2018}", "\u{2019}", "«", "»", "—", "–", "+", "=", "~", "@",
+        "#", "$", "%", "^", "&", "*", "(", ")", "{", "}", "[", "]", "|", "\\", "/", "`", "<",
+        ">", ",", ".", "?", "!", ":", ";", "-", "_",
+    ]
+    .iter()
+    .cloned()
+    .collect();
 
-    text.split_whitespace()
-        .filter(|t| {
-            let lower = t.to_lowercase();
-            !stop_words.contains(&lower.as_str())
-        })
-        .map(|t| t.to_string())
-        .collect()
+    let chars: Vec<char> = text.chars().collect();
+    let mut result: Vec<String> = Vec::new();
+    let mut word = String::new();
+    let mut i = 0;
+
+    while i < chars.len() {
+        let c = chars[i];
+        let o = c as u32;
+        if o < 256 && splits_byte(o as usize) {
+            if !word.is_empty() {
+                result.push(std::mem::take(&mut word));
+            }
+        } else if i < chars.len() - 1 {
+            let mut two = String::with_capacity(4);
+            two.push(c);
+            two.push(chars[i + 1]);
+            if html_code_chars.contains(two.as_str()) {
+                if !word.is_empty() {
+                    result.push(std::mem::take(&mut word));
+                }
+                i += 1; // Skip next char since we used it
+            } else {
+                word.push(c);
+            }
+        } else {
+            word.push(c);
+        }
+        i += 1;
+    }
+
+    if !word.is_empty() {
+        result.push(word);
+    }
+
+    result
+}
+
+/// Whether the ASCII code is a split character.
+///
+/// Reproduces the *actual* bytearray `SPLITS` from `utils.py` (which has a
+/// one-off shift: the second row has 16 entries for "33-47", pushing the
+/// whole table one position right; `a` at 97 is therefore a split char).
+fn splits_byte(o: usize) -> bool {
+    match o {
+        0..=48 => true,
+        49..=58 => false,
+        59..=65 => true,
+        66..=91 => false,
+        92..=97 => true,
+        98..=123 => false,
+        _ => true,
+    }
 }

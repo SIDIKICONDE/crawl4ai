@@ -1,29 +1,27 @@
 use pyo3::prelude::*;
 
-/// Calculate optimal semaphore count based on system resources
+/// Calculate optimal semaphore count based on system resources.
+///
+/// Faithful port of `utils.calculate_semaphore_count`:
+/// `min(max(1, cpu_count // 2), int(memory_gb / 2))`.
 #[pyfunction]
 pub fn calculate_semaphore_count() -> PyResult<usize> {
-    let mut sys = sysinfo::System::new();
-    sys.refresh_memory();
-    let available = sys.available_memory();
-    let total = sys.total_memory();
-
-    let count = if total == 0 {
-        10
-    } else {
-        let ratio = available as f64 / total as f64;
-        let suggested = (num_cpus::get() as f64 * ratio).ceil() as usize;
-        suggested.clamp(2, 50)
-    };
-    Ok(count)
+    let cpu_count = num_cpus::get();
+    let memory_gb = get_system_memory()? as f64 / (1024.0 * 1024.0 * 1024.0);
+    let base_count = (cpu_count / 2).max(1);
+    let memory_based_cap = (memory_gb / 2.0) as usize; // Assume 2GB per instance
+    Ok(base_count.min(memory_based_cap))
 }
 
-/// Get system memory in bytes
+/// Get total system memory in bytes.
+///
+/// Faithful port of `utils.get_system_memory` (returns total memory,
+/// not available memory).
 #[pyfunction]
 pub fn get_system_memory() -> PyResult<u64> {
     let mut sys = sysinfo::System::new();
     sys.refresh_memory();
-    Ok(sys.available_memory())
+    Ok(sys.total_memory())
 }
 
 /// Get truly available memory in GB (cross-platform)
