@@ -8,12 +8,17 @@ from functools import lru_cache
 import fnmatch
 from dataclasses import dataclass
 import weakref
-import math
-from collections import defaultdict
 from typing import Dict
 from ..utils import HeadPeekr
 import asyncio
 import inspect
+
+# Rust-powered implementations (crawl4ai_utils)
+from crawl4ai_utils import (
+    bm25_head_score as _bm25_head_score,
+    content_type_url as _content_type_url,
+    domain_url_allowed as _domain_url_allowed,
+)
 
 
 @dataclass
@@ -360,27 +365,6 @@ class ContentTypeFilter(URLFilter):
 
     }
 
-    @staticmethod
-    @lru_cache(maxsize=1000)
-    def _extract_extension(url: str) -> str:
-        """Extracts file extension from a URL."""
-        # Remove scheme (http://, https://) if present
-        if "://" in url:
-            url = url.split("://", 1)[-1]  # Get everything after '://'
-
-        # Remove domain (everything up to the first '/')
-        path_start = url.find("/")
-        path = url[path_start:] if path_start != -1 else ""
-
-        # Extract last filename in path
-        filename = path.rsplit("/", 1)[-1] if "/" in path else ""
-
-        # Extract and validate extension
-        if "." not in filename:
-            return ""
-
-        return filename.rpartition(".")[-1].lower()
-
     def __init__(
         self,
         allowed_types: Union[str, List[str]],
@@ -407,13 +391,7 @@ class ContentTypeFilter(URLFilter):
     @lru_cache(maxsize=1000)
     def _check_url_cached(self, url: str) -> bool:
         """Cached URL checking"""
-        if not self._check_extension:
-            return True
-        ext = self._extract_extension(url)
-        if not ext:
-            return True
-
-        return ext in self._ext_map
+        return _content_type_url(url, self._ext_map, self._check_extension)
 
     def apply(self, url: str) -> bool:
         """Fast extension check with caching"""
@@ -426,9 +404,6 @@ class DomainFilter(URLFilter):
     """Optimized domain filter with fast lookups and caching"""
 
     __slots__ = ("_allowed_domains", "_blocked_domains", "_domain_cache")
-
-    # Regex for fast domain extraction
-    _DOMAIN_REGEX = re.compile(r"://([^/]+)")
 
     def __init__(
         self,
@@ -455,48 +430,12 @@ class DomainFilter(URLFilter):
         if isinstance(domains, str):
             return {domains.lower()}
         return {d.lower() for d in domains}
-    
-    @staticmethod
-    def _is_subdomain(domain: str, parent_domain: str) -> bool:
-        """Check if domain is a subdomain of parent_domain"""
-        return domain == parent_domain or domain.endswith(f".{parent_domain}")
-
-    @staticmethod
-    @lru_cache(maxsize=10000)
-    def _extract_domain(url: str) -> str:
-        """Ultra-fast domain extraction with regex and caching"""
-        match = DomainFilter._DOMAIN_REGEX.search(url)
-        return match.group(1).lower() if match else ""
 
     def apply(self, url: str) -> bool:
         """Optimized domain checking with early returns"""
-        # Skip processing if no filters
-        if not self._blocked_domains and self._allowed_domains is None:
-            self._update_stats(True)
-            return True
-
-        domain = self._extract_domain(url)
-
-        # Check for blocked domains, including subdomains
-        for blocked in self._blocked_domains:
-            if self._is_subdomain(domain, blocked):
-                self._update_stats(False)
-                return False
-
-        # If no allowed domains specified, accept all non-blocked
-        if self._allowed_domains is None:
-            self._update_stats(True)
-            return True
-
-        # Check if domain matches any allowed domain (including subdomains)
-        for allowed in self._allowed_domains:
-            if self._is_subdomain(domain, allowed):
-                self._update_stats(True)
-                return True
-
-        # No matches found
-        self._update_stats(False)
-        return False
+        result = _domain_url_allowed(url, self._allowed_domains, self._blocked_domains)
+        self._update_stats(result)
+        return result
 
 
 class ContentRelevanceFilter(URLFilter):
@@ -558,24 +497,7 @@ class ContentRelevanceFilter(URLFilter):
 
     def _bm25(self, document: str) -> float:
         """Optimized BM25 implementation for head sections"""
-        doc_terms = self._tokenize(document)
-        doc_len = len(doc_terms)
-        tf = defaultdict(int)
-
-        for term in doc_terms:
-            tf[term] += 1
-
-        score = 0.0
-        for term in set(self.query_terms):
-            term_freq = tf[term]
-            idf = math.log((1 + 1) / (term_freq + 0.5) + 1)  # Simplified IDF
-            numerator = term_freq * (self.k1 + 1)
-            denominator = term_freq + self.k1 * (
-                1 - self.b + self.b * (doc_len / self.avgdl)
-            )
-            score += idf * (numerator / denominator)
-
-        return score
+        return _bm25_head_score(document, self.query, self.k1, self.b, self.avgdl)
 
 
 class SEOFilter(URLFilter):

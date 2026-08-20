@@ -1,6 +1,7 @@
 pub mod bm25;
 pub mod chunking;
 pub mod fs;
+pub mod filter;
 pub mod hash;
 pub mod math;
 pub mod memory;
@@ -62,5 +63,9 @@ fn crawl4ai_utils(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(scorer::content_type_score, m)?)?;
     m.add_function(wrap_pyfunction!(scorer::freshness_score, m)?)?;
     m.add_function(wrap_pyfunction!(scorer::domain_authority_score, m)?)?;
+    // URL filtering (deep_crawling/filters.py)
+    m.add_function(wrap_pyfunction!(filter::content_type_url, m)?)?;
+    m.add_function(wrap_pyfunction!(filter::domain_url_allowed, m)?)?;
+    m.add_function(wrap_pyfunction!(filter::bm25_head_score, m)?)?;
     Ok(())
 }
