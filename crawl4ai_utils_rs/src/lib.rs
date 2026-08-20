@@ -5,6 +5,7 @@ pub mod hash;
 pub mod math;
 pub mod memory;
 pub mod sanitize;
+pub mod scorer;
 pub mod token;
 pub mod url;
 
@@ -55,5 +56,11 @@ fn crawl4ai_utils(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // BM25 / stemming
     m.add_function(wrap_pyfunction!(bm25::stem_tokens, m)?)?;
     m.add_function(wrap_pyfunction!(bm25::bm25_scores, m)?)?;
+    // URL scoring (deep_crawling/scorers.py)
+    m.add_function(wrap_pyfunction!(scorer::keyword_relevance_score, m)?)?;
+    m.add_function(wrap_pyfunction!(scorer::path_depth_score, m)?)?;
+    m.add_function(wrap_pyfunction!(scorer::content_type_score, m)?)?;
+    m.add_function(wrap_pyfunction!(scorer::freshness_score, m)?)?;
+    m.add_function(wrap_pyfunction!(scorer::domain_authority_score, m)?)?;
     Ok(())
 }
