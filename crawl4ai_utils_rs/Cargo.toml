@@ -1,0 +1,27 @@
+[package]
+name = "crawl4ai_utils"
+version = "0.1.0"
+edition = "2021"
+description = "Rust port of Crawl4AI's utils module (chunking, sanitization, parsing), PyO3 bindings"
+license = "Apache-2.0"
+
+[lib]
+name = "crawl4ai_utils"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py39"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.10"
+xxhash-rust = "0.8"
+sysinfo = "0.30"
+dirs = "5.0"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+
+[dev-dependencies]
+criterion = "0.5"
