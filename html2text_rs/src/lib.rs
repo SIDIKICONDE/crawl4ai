@@ -271,9 +271,27 @@ impl HTML2Text {
         value: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
         let name = name.to_string_lossy().into_owned();
-        let slf_ref = slf.borrow();
-        let mut m = slf_ref.machine.lock().unwrap();
         match name.as_str() {
+            "out" => {
+                if value.is_none() {
+                    slf.borrow_mut().out_callback = None;
+                    slf.borrow().machine.lock().unwrap().sink_internal = true;
+                } else {
+                    slf.borrow_mut().out_callback = Some(value.clone().unbind());
+                    slf.borrow().machine.lock().unwrap().sink_internal = false;
+                }
+            }
+            "tag_callback" => {
+                if value.is_none() {
+                    slf.borrow_mut().tag_callback = None;
+                } else {
+                    slf.borrow_mut().tag_callback = Some(value.clone().unbind());
+                }
+            }
+            _ => {
+                let slf_ref = slf.borrow();
+                let mut m = slf_ref.machine.lock().unwrap();
+                match name.as_str() {
             "ul_item_mark" => m.ul_item_mark = value.extract()?,
             "emphasis_mark" => m.emphasis_mark = value.extract()?,
             "strong_mark" => m.strong_mark = value.extract()?,
@@ -343,26 +361,12 @@ impl HTML2Text {
             "abbr_title" => m.abbr_title = value.extract()?,
             "abbr_data" => m.abbr_data = value.extract()?,
             "outtextlist" => m.outtextlist = value.extract()?,
-            "out" => {
-                if value.is_none() {
-                    slf.borrow_mut().out_callback = None;
-                    m.sink_internal = true;
-                } else {
-                    slf.borrow_mut().out_callback = Some(value.clone().unbind());
-                    m.sink_internal = false;
+                    _ => {
+                        drop(m);
+                        let dict = slf.getattr("__dict__")?.downcast_into::<PyDict>()?;
+                        dict.set_item(name.as_str(), value)?;
+                    }
                 }
-            }
-            "tag_callback" => {
-                if value.is_none() {
-                    slf.borrow_mut().tag_callback = None;
-                } else {
-                    slf.borrow_mut().tag_callback = Some(value.clone().unbind());
-                }
-            }
-            _ => {
-                drop(m);
-                let dict = slf.getattr("__dict__")?.downcast_into::<PyDict>()?;
-                dict.set_item(name.as_str(), value)?;
             }
         }
         Ok(())
