@@ -29,6 +29,13 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 from urllib.parse import quote, urljoin
 
+# Native (Rust) implementations of pure scoring/filtering helpers
+from crawl4ai_utils import (
+    bm25_scores as _rs_bm25_scores,
+    is_nonsense_url as _rs_is_nonsense_url,
+    url_relevance_score as _rs_url_relevance_score,
+)
+
 import httpx
 import fnmatch
 try:
@@ -42,11 +49,6 @@ try:
     HAS_BROTLI = True
 except ImportError:
     HAS_BROTLI = False
-try:
-    import rank_bm25
-    HAS_BM25 = True
-except ImportError:
-    HAS_BM25 = False
 
 # Import AsyncLoggerBase from crawl4ai's logger module
 # Assuming crawl4ai/async_logger.py defines AsyncLoggerBase
@@ -751,10 +753,6 @@ class AsyncUrlSeeder:
 
     async def _apply_bm25_scoring(self, results: List[Dict[str, Any]], config: "SeedingConfig") -> List[Dict[str, Any]]:
         """Apply BM25 scoring to results that have head_data."""
-        if not HAS_BM25:
-            self._log("warning", "BM25 scoring requested but rank_bm25 not available", tag="URL_SEED")
-            return results
-        
         # Extract text contexts from head data
         text_contexts = []
         valid_results = []
@@ -1518,195 +1516,17 @@ class AsyncUrlSeeder:
 
     def _calculate_url_relevance_score(self, query: str, url: str) -> float:
         """Calculate relevance score between query and URL using string matching."""
-        # Normalize inputs
-        query_lower = query.lower()
-        url_lower = url.lower()
-
-        # Extract URL components
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        domain = parsed.netloc.replace('www.', '')
-        path = parsed.path.strip('/')
-
-        # Create searchable text from URL
-        # Split domain by dots and path by slashes
-        domain_parts = domain.split('.')
-        path_parts = [p for p in path.split('/') if p]
-
-        # Include query parameters if any
-        query_params = parsed.query
-        param_parts = []
-        if query_params:
-            for param in query_params.split('&'):
-                if '=' in param:
-                    key, value = param.split('=', 1)
-                    param_parts.extend([key, value])
-
-        # Combine all parts
-        all_parts = domain_parts + path_parts + param_parts
-
-        # Calculate scores
-        scores = []
-        query_tokens = query_lower.split()
-
-        # 1. Exact match in any part (highest score)
-        for part in all_parts:
-            part_lower = part.lower()
-            if query_lower in part_lower:
-                scores.append(1.0)
-            elif part_lower in query_lower:
-                scores.append(0.9)
-
-        # 2. Token matching
-        for token in query_tokens:
-            token_scores = []
-            for part in all_parts:
-                part_lower = part.lower()
-                if token in part_lower:
-                    # Score based on how much of the part the token covers
-                    coverage = len(token) / len(part_lower)
-                    token_scores.append(0.7 * coverage)
-                elif part_lower in token:
-                    coverage = len(part_lower) / len(token)
-                    token_scores.append(0.6 * coverage)
-
-            if token_scores:
-                scores.append(max(token_scores))
-
-        # 3. Character n-gram similarity (for fuzzy matching)
-        def get_ngrams(text, n=3):
-            return set(text[i:i+n] for i in range(len(text)-n+1))
-
-        # Combine all URL parts into one string for n-gram comparison
-        url_text = ' '.join(all_parts).lower()
-        if len(query_lower) >= 3 and len(url_text) >= 3:
-            query_ngrams = get_ngrams(query_lower)
-            url_ngrams = get_ngrams(url_text)
-            if query_ngrams and url_ngrams:
-                intersection = len(query_ngrams & url_ngrams)
-                union = len(query_ngrams | url_ngrams)
-                jaccard = intersection / union if union > 0 else 0
-                scores.append(0.5 * jaccard)
-
-        # Calculate final score
-        if not scores:
-            return 0.0
-
-        # Weighted average with bias towards higher scores
-        scores.sort(reverse=True)
-        weighted_score = 0
-        total_weight = 0
-        for i, score in enumerate(scores):
-            weight = 1 / (i + 1)  # Higher weight for better matches
-            weighted_score += score * weight
-            total_weight += weight
-
-        final_score = weighted_score / total_weight if total_weight > 0 else 0
-        return min(final_score, 1.0)  # Cap at 1.0
+        return _rs_url_relevance_score(query, url)
 
     def _is_nonsense_url(self, url: str) -> bool:
         """
         Check if URL is a utility/nonsense URL that shouldn't be crawled.
         Returns True if the URL should be filtered out.
         """
-        url_lower = url.lower()
-        
-        # Extract path and filename
-        from urllib.parse import urlparse
-        parsed = urlparse(url)
-        path = parsed.path.lower()
-        
-        # 1. Robot and sitemap files
-        if path.endswith(('/robots.txt', '/sitemap.xml', '/sitemap_index.xml')):
-            return True
-        
-        # 2. Sitemap variations
-        if '/sitemap' in path and path.endswith(('.xml', '.xml.gz', '.txt')):
-            return True
-        
-        # 3. Common utility files
-        utility_files = [
-            'ads.txt', 'humans.txt', 'security.txt', '.well-known/security.txt',
-            'crossdomain.xml', 'browserconfig.xml', 'manifest.json',
-            'apple-app-site-association', '.well-known/apple-app-site-association',
-            'favicon.ico', 'apple-touch-icon.png', 'android-chrome-192x192.png'
-        ]
-        if any(path.endswith(f'/{file}') for file in utility_files):
-            return True
-        
-        # # 4. Feed files
-        # if path.endswith(('.rss', '.atom', '/feed', '/rss', '/atom', '/feed.xml', '/rss.xml')):
-        #     return True
-        
-        # # 5. API endpoints and data files
-        # api_patterns = ['/api/', '/v1/', '/v2/', '/v3/', '/graphql', '/.json', '/.xml']
-        # if any(pattern in path for pattern in api_patterns):
-        #     return True
-        
-        # # 6. Archive and download files
-        # download_extensions = [
-        #     '.zip', '.tar', '.gz', '.rar', '.7z', '.bz2',
-        #     '.exe', '.dmg', '.pkg', '.deb', '.rpm',
-        #     '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-        #     '.csv', '.tsv', '.sql', '.db', '.sqlite'
-        # ]
-        # if any(path.endswith(ext) for ext in download_extensions):
-        #     return True
-        
-        # # 7. Media files (often not useful for text content)
-        # media_extensions = [
-        #     '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.ico',
-        #     '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm',
-        #     '.mp3', '.wav', '.ogg', '.m4a', '.flac',
-        #     '.woff', '.woff2', '.ttf', '.eot', '.otf'
-        # ]
-        # if any(path.endswith(ext) for ext in media_extensions):
-        #     return True
-        
-        # # 8. Source code and config files
-        # code_extensions = [
-        #     '.js', '.css', '.scss', '.sass', '.less',
-        #     '.map', '.min.js', '.min.css',
-        #     '.py', '.rb', '.php', '.java', '.cpp', '.h',
-        #     '.yaml', '.yml', '.toml', '.ini', '.conf', '.config'
-        # ]
-        # if any(path.endswith(ext) for ext in code_extensions):
-        #     return True
-        
-        # 9. Hidden files and directories
-        path_parts = path.split('/')
-        if any(part.startswith('.') for part in path_parts if part):
-            return True
-        
-        # 10. Common non-content paths
-        non_content_paths = [
-            '/wp-admin', '/wp-includes', '/wp-content/uploads',
-            '/admin', '/login', '/signin', '/signup', '/register',
-            '/checkout', '/cart', '/account', '/profile',
-            '/search', '/404', '/error',
-            '/.git', '/.svn', '/.hg',
-            '/cgi-bin', '/scripts', '/includes'
-        ]
-        if any(ncp in path for ncp in non_content_paths):
-            return True
-        
-        # 11. URL patterns that indicate non-content
-        if any(pattern in url_lower for pattern in ['?print=', '&print=', '/print/', '_print.']):
-            return True
-        
-        # 12. Very short paths (likely homepage redirects or errors)
-        if len(path.strip('/')) < 3 and path not in ['/', '/en', '/de', '/fr', '/es', '/it']:
-            return True
-        
-        return False
+        return _rs_is_nonsense_url(url)
     
     def _calculate_bm25_score(self, query: str, documents: List[str]) -> List[float]:
-        """Calculate BM25 scores for documents against a query."""
-        if not HAS_BM25:
-            self._log(
-                "warning", "rank_bm25 not installed. Returning zero scores.", tag="URL_SEED")
-            return [0.0] * len(documents)
-
+        """Calculate BM25 scores for documents against a query (native BM25)."""
         if not query or not documents:
             return [0.0] * len(documents)
 
@@ -1719,32 +1539,23 @@ class AsyncUrlSeeder:
         if all(len(doc) == 0 for doc in tokenized_docs):
             return [0.0] * len(documents)
 
-        # Create BM25 instance and calculate scores
-        try:
-            from rank_bm25 import BM25Okapi
-            bm25 = BM25Okapi(tokenized_docs)
-            scores = bm25.get_scores(query_tokens)
+        # Calculate raw BM25 scores (native implementation)
+        scores = _rs_bm25_scores(tokenized_docs, query_tokens)
 
-            # Normalize scores to 0-1 range
-            # BM25 can return negative scores, so we need to handle the full range
-            if len(scores) == 0:
-                return []
-            
-            min_score = min(scores)
-            max_score = max(scores)
-            
-            # If all scores are the same, return 0.5 for all
-            if max_score == min_score:
-                return [0.5] * len(scores)
-            
-            # Normalize to 0-1 range using min-max normalization
-            normalized_scores = [(score - min_score) / (max_score - min_score) for score in scores]
+        # Normalize scores to 0-1 range
+        # BM25 can return negative scores, so we need to handle the full range
+        if len(scores) == 0:
+            return []
 
-            return normalized_scores
-        except Exception as e:
-            self._log("error", "Error calculating BM25 scores: {error}",
-                      params={"error": str(e)}, tag="URL_SEED")
-            return [0.0] * len(documents)
+        min_score = min(scores)
+        max_score = max(scores)
+
+        # If all scores are the same, return 0.5 for all
+        if max_score == min_score:
+            return [0.5] * len(scores)
+
+        # Normalize to 0-1 range using min-max normalization
+        return [(score - min_score) / (max_score - min_score) for score in scores]
 
     # ─────────────────────────────── cleanup methods
     async def close(self):

@@ -7,6 +7,7 @@ pub mod math;
 pub mod memory;
 pub mod sanitize;
 pub mod scorer;
+pub mod seeder;
 pub mod token;
 pub mod url;
 
@@ -67,5 +68,8 @@ fn crawl4ai_utils(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(filter::content_type_url, m)?)?;
     m.add_function(wrap_pyfunction!(filter::domain_url_allowed, m)?)?;
     m.add_function(wrap_pyfunction!(filter::bm25_head_score, m)?)?;
+    // URL seeder (async_url_seeder.py)
+    m.add_function(wrap_pyfunction!(seeder::url_relevance_score, m)?)?;
+    m.add_function(wrap_pyfunction!(seeder::is_nonsense_url, m)?)?;
     Ok(())
 }
